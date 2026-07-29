@@ -75,8 +75,10 @@ async def upscale_image_ai(image_bytes: bytes) -> bytes:
             temp_in.write(image_bytes)
             temp_in_path = temp_in.name
             
-        # Increase timeout to 5 minutes (300 seconds) because 4K AI takes time
-        # gradio_client automatically picks up HF_TOKEN from environment
+        # Pass HF_TOKEN via environment variable for higher ZeroGPU quota
+        hf_token = os.getenv("HF_TOKEN")
+        if hf_token:
+            os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token
         client = Client(HF_API_URL, httpx_kwargs={"timeout": 300.0})
         
         result_path = None
@@ -105,9 +107,24 @@ async def upscale_image_ai(image_bytes: bytes) -> bytes:
             out_bytes = f.read()
             
         # Clean up
-        os.remove(temp_in_path)
+        try:
+            os.remove(temp_in_path)
+        except Exception:
+            pass
         
-        logger.info("✅ AI Upscaling via Hugging Face Gradio successful!")
+        try:
+            if result_path and os.path.exists(result_path):
+                os.remove(result_path)
+                # Gradio sometimes saves files in a parent directory within /tmp/gradio/
+                # We can try to remove the parent directory if it's empty
+                parent_dir = os.path.dirname(result_path)
+                if os.path.basename(parent_dir).startswith('gradio'):
+                    import shutil
+                    shutil.rmtree(parent_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning(f"Failed to remove Gradio result path: {e}")
+        
+        logger.info("✅ AI Upscaling via Hugging Face Gradio successful (and temporary files deleted)!")
         return out_bytes
         
     except Exception as e:
