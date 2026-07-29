@@ -330,10 +330,11 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
                 document=upscaled_bytes,
                 filename=filename,
                 thumbnail=thumb_bytes,
-                caption="📥 4K Enhanced · Direct Upload",
                 read_timeout=300,
                 write_timeout=300
             )
+            # Send the text as a completely separate message
+            await update.message.reply_text("📥 4K Enhanced · Direct Upload")
             # Delete the status message only after successful upload
             await msg.delete()
         else:
