@@ -5,3 +5,4 @@ APScheduler
 gradio-client
 Pillow
 flask
+google-generativeai
