@@ -313,9 +313,23 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Change the message to uploading state instead of deleting it immediately
             await msg.edit_text("📤 Uploading 4K image to Telegram... (This might take a minute)")
             
+            # Generate a thumbnail so Telegram always shows a preview (even for >10MB files)
+            thumb_bytes = None
+            try:
+                img = Image.open(io.BytesIO(upscaled_bytes))
+                img.thumbnail((320, 320))
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                thumb_io = io.BytesIO()
+                img.save(thumb_io, format="JPEG", quality=85)
+                thumb_bytes = thumb_io.getvalue()
+            except Exception as e:
+                logger.warning(f"Could not generate thumbnail: {e}")
+            
             await update.message.reply_document(
                 document=upscaled_bytes,
                 filename=filename,
+                thumbnail=thumb_bytes,
                 caption="📥 4K Enhanced · Direct Upload",
                 read_timeout=300,
                 write_timeout=300
@@ -363,3 +377,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
