@@ -6,6 +6,7 @@ import logging
 import threading
 import urllib.request
 import httpx
+import google.generativeai as genai
 from PIL import Image
 from flask import Flask
 from dotenv import load_dotenv
@@ -52,6 +53,32 @@ def keep_awake_pinger():
         except Exception as e:
             logger.error(f"❌ Auto-Ping Failed: {e}")
 # -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# GOOGLE GEMINI AI (For Auto-Naming)
+# -------------------------------------------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+async def get_ai_filename(image_bytes: bytes) -> str:
+    if not GEMINI_API_KEY:
+        return "4k_enhanced.png"
+    try:
+        import asyncio
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        img = Image.open(io.BytesIO(image_bytes))
+        prompt = "Look at this wallpaper image. Generate a short, descriptive file name for it (max 3 words). Use underscores instead of spaces. Do not include the file extension. Example: Dark_Anime_Boy or Red_Sports_Car"
+        
+        # Run in thread so it doesn't block the async loop
+        response = await asyncio.to_thread(model.generate_content, [prompt, img])
+        filename = response.text.strip().replace(" ", "_").replace(".", "").replace("\n", "")
+        if not filename:
+            return "4k_enhanced.png"
+        return f"{filename}_4K.png"
+    except Exception as e:
+        logger.error(f"Failed to generate AI filename: {e}")
+        return "4k_enhanced.png"
 
 # -------------------------------------------------------------
 # 4K AI UPSCALER (via Hugging Face Spaces API)
@@ -273,6 +300,14 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
             
         if r.status_code == 200:
             image_bytes = r.content
+            
+            caption_text = str(update.message.caption or "").lower()
+            if "#name" in caption_text:
+                await msg.edit_text("✨ AI is studying the image to name it and enhancing to 4K...")
+                filename = await get_ai_filename(image_bytes)
+            else:
+                filename = "4k_enhanced.png"
+                
             upscaled_bytes = await upscale_image_ai(image_bytes)
             
             # Delete the "Please wait" message now that we have the result
@@ -280,7 +315,7 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             await update.message.reply_document(
                 document=upscaled_bytes,
-                filename="4k_enhanced.png",
+                filename=filename,
                 caption="📥 4K Enhanced · Direct Upload"
             )
         else:
