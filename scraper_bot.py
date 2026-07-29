@@ -310,19 +310,26 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
             upscaled_bytes = await upscale_image_ai(image_bytes)
             
-            # Delete the "Please wait" message now that we have the result
-            await msg.delete()
+            # Change the message to uploading state instead of deleting it immediately
+            await msg.edit_text("📤 Uploading 4K image to Telegram... (This might take a minute)")
             
             await update.message.reply_document(
                 document=upscaled_bytes,
                 filename=filename,
-                caption="📥 4K Enhanced · Direct Upload"
+                caption="📥 4K Enhanced · Direct Upload",
+                read_timeout=300,
+                write_timeout=300
             )
+            # Delete the status message only after successful upload
+            await msg.delete()
         else:
             await msg.edit_text("⚠️ Failed to download your image.")
     except Exception as e:
         logger.error(f"Failed to enhance direct image: {e}")
-        await msg.edit_text(f"⚠️ AI Enhancer failed or is busy (Error: {e}). Please try again.")
+        try:
+            await msg.edit_text(f"⚠️ Process failed (Error: {e}). Please try again.")
+        except Exception:
+            await update.message.reply_text(f"⚠️ Process failed (Error: {e}). Please try again.")
 
 def main():
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "WAITING_FOR_TOKEN":
