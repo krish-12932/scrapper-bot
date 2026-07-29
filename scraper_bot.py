@@ -75,11 +75,14 @@ async def upscale_image_ai(image_bytes: bytes) -> bytes:
             temp_in.write(image_bytes)
             temp_in_path = temp_in.name
             
-        # Pass HF_TOKEN via environment variable for higher ZeroGPU quota
+        # Pass HF_TOKEN explicitly so that it authenticates properly for more quota
         hf_token = os.getenv("HF_TOKEN")
         if hf_token:
+            os.environ["HF_TOKEN"] = hf_token
             os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token
-        client = Client(HF_API_URL, httpx_kwargs={"timeout": 300.0})
+            client = Client(HF_API_URL, token=hf_token, httpx_kwargs={"timeout": 300.0})
+        else:
+            client = Client(HF_API_URL, httpx_kwargs={"timeout": 300.0})
         
         result_path = None
         for attempt in range(10):
