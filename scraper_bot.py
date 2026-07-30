@@ -88,11 +88,10 @@ HF_API_URL = os.getenv("HF_API_URL")
 from gradio_client import Client, handle_file
 import tempfile
 
-async def upscale_image_ai(image_bytes: bytes) -> bytes:
-    """
-    Sends image to Hugging Face Gradio API for RealESRGAN 4K upscaling.
-    Returns the upscaled image bytes.
-    """
+async def upscale_image_ai(image_bytes: bytes, mode: str = "Auto") -> bytes:
+    """Sends image to Hugging Face API for upscaling."""
+    logger.info(f"Uploading {len(image_bytes)} bytes to Hugging Face AI (Mode: {mode})...")
+    
     if not HF_API_URL:
         raise ValueError("HF_API_URL is not set in .env")
         
@@ -119,7 +118,7 @@ async def upscale_image_ai(image_bytes: bytes) -> bytes:
                 result_path = await asyncio.to_thread(
                     client.predict,
                     handle_file(temp_in_path),
-                    "Auto"   # Detection mode: Auto, Anime, or General
+                    mode   # Detection mode: Auto, Anime, or General
                 )
                 break  # Success
             except Exception as e:
@@ -313,13 +312,19 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
             image_bytes = r.content
             
             caption_text = str(update.message.caption or "").lower()
+            mode = "Auto"
+            if "#anime" in caption_text:
+                mode = "Anime"
+            elif "#real" in caption_text:
+                mode = "General"
+                
             if "#name" in caption_text:
                 await msg.edit_text("✨ AI is studying the image to name it and enhancing to 4K...")
                 filename = await get_ai_filename(image_bytes)
             else:
                 filename = "4k_enhanced.png"
                 
-            upscaled_bytes = await upscale_image_ai(image_bytes)
+            upscaled_bytes = await upscale_image_ai(image_bytes, mode=mode)
             
             # Change the message to uploading state instead of deleting it immediately
             await msg.edit_text("📤 Uploading 4K image to Telegram... (This might take a minute)")
