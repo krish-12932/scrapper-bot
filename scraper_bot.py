@@ -287,11 +287,21 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Handles direct image uploads sent to the bot."""
     msg = await update.message.reply_text("✨ AI is enhancing your image to 4K... (Please wait)")
     try:
-        # Get the highest resolution photo, or document
+        # ⚠️ IMPORTANT: Telegram compresses "photos" to max ~1280px JPEG
+        # We MUST receive image as "document/file" to get full original resolution
         if update.message.photo:
-            file_id = update.message.photo[-1].file_id
-        else:
-            file_id = update.message.document.file_id
+            await msg.edit_text(
+                "⚠️ *Please resend the image as a File/Document!*\n\n"
+                "Telegram compresses photos automatically (max ~1280px).\n"
+                "To get true 4K quality:\n"
+                "📎 Tap the *paperclip* → select *File* → choose your image\n\n"
+                "_This ensures your original full-resolution image is processed._",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Image sent as document — full original resolution preserved ✅
+        file_id = update.message.document.file_id
             
         file = await context.bot.get_file(file_id)
         
