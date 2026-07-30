@@ -118,7 +118,8 @@ async def upscale_image_ai(image_bytes: bytes) -> bytes:
                 # Run the blocking gradio client in a separate thread!
                 result_path = await asyncio.to_thread(
                     client.predict,
-                    handle_file(temp_in_path)
+                    handle_file(temp_in_path),
+                    "Auto"   # Detection mode: Auto, Anime, or General
                 )
                 break  # Success
             except Exception as e:
@@ -333,6 +334,7 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
                 read_timeout=300,
                 write_timeout=300
             )
+            
             # Send the text as a completely separate message
             await update.message.reply_text("📥 4K Enhanced · Direct Upload")
             # Delete the status message only after successful upload
