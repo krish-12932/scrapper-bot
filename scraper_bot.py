@@ -165,8 +165,25 @@ async def upscale_image_ai(image_bytes: bytes, mode: str = "Auto") -> bytes:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
     welcome_msg = (
-        "🤖 **Welcome to the Scraping Bot!**\n\n"
-        "Send me an Instagram Reel or Post link, and I will download it for you."
+        "🤖 *Welcome to the 4K AI Enhancer Bot!*\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🖼 *How to Enhance an Image to 4K:*\n\n"
+        "1️⃣ Attach your image\n"
+        "2️⃣ *Send it as a File/Document* — do NOT send as a Photo!\n"
+        "   _(Telegram compresses photos → quality gets ruined)_\n"
+        "3️⃣ Add a hashtag in the caption:\n\n"
+        "   🔸 *#anime* — For Anime / Cartoon / Illustration\n"
+        "   🔸 *#real* — For Real photos (nature, city, portrait)\n"
+        "   🔸 *No caption* — Bot will auto-detect the type\n"
+        "   🔸 *#name* — AI will generate a smart filename\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📎 *How to send as a File:*\n"
+        "Tap Paperclip (📎) → select *File* → choose image → add *#anime* in caption → Send\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📸 *Instagram Download:*\n"
+        "Send any Instagram Reel or Post link — I'll download it for you!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ Auto-detection works, but adding *#anime* or *#real* gives the best results!"
     )
     await update.message.reply_text(welcome_msg, parse_mode="Markdown")
 
@@ -341,13 +358,14 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
                 thumb_bytes = thumb_io.getvalue()
             except Exception as e:
                 logger.warning(f"Could not generate thumbnail: {e}")
-            
+
+            # Send image as raw PNG directly without any compression or alteration
             await update.message.reply_document(
                 document=upscaled_bytes,
                 filename=filename,
                 thumbnail=thumb_bytes,
-                read_timeout=300,
-                write_timeout=300
+                read_timeout=900,
+                write_timeout=900
             )
             
             # Send the text as a completely separate message
@@ -359,9 +377,9 @@ async def handle_direct_image(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Failed to enhance direct image: {e}")
         try:
-            await msg.edit_text(f"⚠️ Process failed (Error: {e}). Please try again.")
+            await msg.edit_text("⚠️ Image enhancement failed. Please try again.")
         except Exception:
-            await update.message.reply_text(f"⚠️ Process failed (Error: {e}). Please try again.")
+            await update.message.reply_text("⚠️ Image enhancement failed. Please try again.")
 
 def main():
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "WAITING_FOR_TOKEN":
