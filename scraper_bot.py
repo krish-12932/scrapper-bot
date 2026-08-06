@@ -89,103 +89,75 @@ from gradio_client import Client, handle_file
 import tempfile
 
 async def upscale_image_ai(image_bytes: bytes, mode: str = "Auto") -> bytes:
-    """Sends image to Hugging Face API (Space A -> Space B Pipeline)."""
-    logger.info(f"Uploading {len(image_bytes)} bytes to AI Upscaling Pipeline (Mode: {mode})...")
+    """Sends image to Hugging Face API (Space A Real-ESRGAN Upscaler)."""
+    logger.info(f"Uploading {len(image_bytes)} bytes to Hugging Face AI (Mode: {mode})...")
     
     if not HF_API_URL:
         raise ValueError("HF_API_URL is not set in .env")
         
     try:
-        # Step 1: Send to Space A (Real-ESRGAN Upscaling)
+        # Save bytes to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_in:
             temp_in.write(image_bytes)
             temp_in_path = temp_in.name
             
+        # Pass HF_TOKEN explicitly so that it authenticates properly for more quota
         hf_token = os.getenv("HF_TOKEN")
         if hf_token:
             os.environ["HF_TOKEN"] = hf_token
             os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token
-            client_a = Client(HF_API_URL, token=hf_token, httpx_kwargs={"timeout": 300.0})
+            client = Client(HF_API_URL, token=hf_token, httpx_kwargs={"timeout": 300.0})
         else:
-            client_a = Client(HF_API_URL, httpx_kwargs={"timeout": 300.0})
+            client = Client(HF_API_URL, httpx_kwargs={"timeout": 300.0})
         
-        result_path_a = None
+        result_path = None
         for attempt in range(10):
             try:
                 import asyncio
-                result_path_a = await asyncio.to_thread(
-                    client_a.predict,
+                # Run the blocking gradio client in a separate thread!
+                result_path = await asyncio.to_thread(
+                    client.predict,
                     handle_file(temp_in_path),
-                    mode
+                    mode   # Detection mode: Auto, Anime, or General
                 )
-                break
+                break  # Success
             except Exception as e:
                 if "No GPU was available" in str(e) and attempt < 9:
-                    logger.warning(f"Space A GPU busy, retrying... (Attempt {attempt+1}/10)")
+                    logger.warning(f"GPU busy, retrying... (Attempt {attempt+1}/10)")
+                    import asyncio
                     await asyncio.sleep(10)
                 else:
                     raise e
                     
-        if not result_path_a:
-            raise Exception("Failed to process image on Space A.")
+        if not result_path:
+            raise Exception("Failed to process image after 3 attempts.")
             
-        with open(result_path_a, "rb") as f:
-            intermediate_bytes = f.read()
-
-        # Step 2: Send 4K Base Image to Space B (HAT + CodeFormer Restoration) if URL exists
-        hf_space_b_url = os.getenv("HF_SPACE_B_URL")
-        if hf_space_b_url:
-            logger.info("Sending 4K base image to Space B for Detail & Face Restoration...")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_b:
-                temp_b.write(intermediate_bytes)
-                temp_b_path = temp_b.name
-
-            client_b = Client(hf_space_b_url, token=hf_token, httpx_kwargs={"timeout": 300.0})
-            result_path_b = None
-            for attempt in range(10):
-                try:
-                    result_path_b = await asyncio.to_thread(
-                        client_b.predict,
-                        handle_file(temp_b_path),
-                        0.8 # CodeFormer Fidelity
-                    )
-                    break
-                except Exception as e:
-                    if "No GPU was available" in str(e) and attempt < 9:
-                        logger.warning(f"Space B GPU busy, retrying... (Attempt {attempt+1}/10)")
-                        await asyncio.sleep(10)
-                    else:
-                        logger.warning(f"Space B skipped due to error: {e}")
-                        break
-
-            if result_path_b and os.path.exists(result_path_b):
-                with open(result_path_b, "rb") as f:
-                    out_bytes = f.read()
-                try:
-                    os.remove(temp_b_path)
-                    import shutil
-                    shutil.rmtree(os.path.dirname(result_path_b), ignore_errors=True)
-                except Exception:
-                    pass
-            else:
-                out_bytes = intermediate_bytes
-        else:
-            out_bytes = intermediate_bytes
-
-        # Clean up input temp file
+        # Read the resulting image bytes
+        with open(result_path, "rb") as f:
+            out_bytes = f.read()
+            
+        # Clean up
         try:
             os.remove(temp_in_path)
-            import shutil
-            shutil.rmtree(os.path.dirname(result_path_a), ignore_errors=True)
         except Exception:
             pass
         
-        logger.info("✅ Full AI Enhancement Pipeline (Space A -> Space B) successful!")
+        try:
+            if result_path and os.path.exists(result_path):
+                os.remove(result_path)
+                parent_dir = os.path.dirname(result_path)
+                if os.path.basename(parent_dir).startswith('gradio'):
+                    import shutil
+                    shutil.rmtree(parent_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning(f"Failed to remove Gradio result path: {e}")
+        
+        logger.info("✅ AI Upscaling via Hugging Face Gradio successful (and temporary files deleted)!")
         return out_bytes
         
     except Exception as e:
-        logger.error(f"Pipeline Error: {e}")
-        raise Exception(f"AI Pipeline failed: {e}")
+        logger.error(f"Gradio API Error: {e}")
+        raise Exception(f"HF API failed: {e}")
 # -------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
